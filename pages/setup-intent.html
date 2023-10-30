@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://js.stripe.com/v3/"></script>
+    <title>Setup Intent</title>
+  </head>
+  <body>
+    <div class="main">
+      <div id="checkout">
+        <div id="payment-form">
+          <h2>Save card (Setup intent)</h2>
+          <fieldset>
+            <label>
+              <span>Name</span>
+              <input id="cardholder-name" class="field" value="Illia Mikhow" />
+            </label>
+          </fieldset>
+          <fieldset>
+            <label>
+              <span>Card details</span>
+              <div id="card-element" class="field"></div>
+            </label>
+          </fieldset>
+          <button id="card-button">Save card</button>
+        </div>
+      </div>
+    </div>
+    <div id="debug-messages"><b>DEBUG:</b></div>
+  </body>
+  <script>
+    function debug(message) {
+      const debugMessage = document.getElementById('debug-messages');
+      console.log('Debug: ', message);
+      debugMessage.innerText += `\n${message}`;
+    }
+
+    // -----> PUT YOUR TEST KEY HERE <------
+    const key = 'pk_test_';
+    // -------------------------------------
+    const reqUrl = 'http://localhost:3000/api/payments/stripe/setup-intents';
+    const cardButton = document.getElementById('card-button');
+    debug('Create setup intent...');
+    let clientSecret;
+
+    fetch(reqUrl)
+      .then((raw) => raw.json())
+      .then(async (body) => {
+        clientSecret = body.data.clientSecret;
+        debug(`Recieved clientSecret: ${clientSecret}`);
+      });
+
+    const stripe = Stripe(key);
+    const elements = stripe.elements();
+
+    const cardElement = elements.create('card');
+    cardElement.mount('#card-element');
+
+    cardButton.addEventListener('click', (e) => {
+      e.preventDefault();
+
+      stripe
+        .confirmCardSetup(clientSecret, {
+          payment_method: {
+            card: cardElement,
+          },
+        })
+        .then((result) => {
+          if (result.error) {
+            debug(result.error.message);
+          } else {
+            debug('Successfully saved card');
+            debug(`Payment method: ${result.setupIntent.payment_method}`);
+            console.log(result);
+          }
+        });
+    });
+  </script>
+</html>

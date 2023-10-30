@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://js.stripe.com/v3/"></script>
+    <title>Setup Intent</title>
+  </head>
+  <body>
+    <div>
+      <h2>Cards</h2>
+      <ul id="cards-list"></ul>
+
+      <fieldset>
+        <label>
+          <span>Payment Method</span>
+          <input id="payment-method" value="pm_1O6vA6GTq7OAQG1vp4TqPLKN" />
+        </label>
+      </fieldset>
+
+      <fieldset>
+        <label>
+          <span>Amount</span>
+          <input id="amount" type="number" value="500" />
+        </label>
+      </fieldset>
+
+      <button id="charge-button">Charge</button>
+
+      <div id="payment-element"></div>
+      <div id="debug-messages">
+        <b>DEBUG</b>
+      </div>
+    </div>
+  </body>
+  <script>
+    // -----> PUT YOUR TEST KEY HERE <------
+    const key = 'pk_test_';
+    // -------------------------------------
+    const stripe = Stripe(key);
+    const elements = stripe.elements();
+
+    const debug = (message) => {
+      const debugMessage = document.getElementById('debug-messages');
+      console.log('Debug: ', message);
+      debugMessage.innerText += `\n${message}`;
+    };
+    const loadCards = () => {
+      const GET_CREDIT_CARDS_URL =
+        'http://localhost:3000/api/payments/stripe/credit-cards';
+      const addCard = (card) => {
+        const li = document.createElement('li');
+        li.innerText = card.id;
+
+        cardsList.append(li);
+      };
+
+      fetch(GET_CREDIT_CARDS_URL)
+        .then((raw) => raw.json())
+        .then((body) => {
+          const cards = body.data.cards;
+
+          for (const card of cards) addCard(card);
+        });
+    };
+    const createPaymentIntent = async (payment_method, amount) => {
+      const CREATE_PAYMENT_METHOD_URL =
+        'http://localhost:3000/api/payments/stripe/payment-intents';
+
+      debug('Create payment method id...');
+      debug(`Amount: ${amount}`);
+      debug(`Payment Method: ${payment_method}`);
+
+      const body = await fetch(CREATE_PAYMENT_METHOD_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          paymentMethodId: payment_method,
+          amount,
+        }),
+      }).then((res) => res.json());
+
+      if (body.data.error)
+        return debug(
+          `Error parsing response from backend: ${body.data.error.message}`
+        );
+
+      const paymentIntent = body.data.paymentIntent;
+      console.log('Payment Intent: ', paymentIntent);
+
+      if (
+        ['requires_action', 'authentication_required'].includes(
+          paymentIntent.status
+        )
+      ) {
+        debug('Payment requires an action/confirmation/authentication...');
+        const confirm = await stripe.confirmCardPayment(
+          paymentIntent.client_secret,
+          {
+            payment_method: paymentIntent.payment_method,
+          }
+        );
+
+        console.log('confirm: ', confirm);
+
+        if (confirm.error) {
+          debug('Failed to confirm payment intent');
+          debug(confirm.error.message);
+          return;
+        }
+
+        debug('Confirmed payment intent successfully');
+      }
+      debug('Payment was successful!');
+    };
+
+    const cardsList = document.getElementById('cards-list');
+    const chargeButton = document.getElementById('charge-button');
+    const amountInput = document.getElementById('amount');
+    const paymentMethodInput = document.getElementById('payment-method');
+
+    chargeButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+
+      const amount = parseInt(amountInput.value);
+      const payment_method = paymentMethodInput.value;
+
+      if (amount === undefined || !payment_method) {
+        return debug('Input data is missing');
+      }
+
+      const paymentIntent = await createPaymentIntent(payment_method, amount);
+    });
+
+    loadCards();
+  </script>
+</html>
