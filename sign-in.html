@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body>
+    <ul id="nav">
+      <li>
+        <a href="/sign-in.html">Authentication</a>
+        <a href="/pages/setup-intent.html">Save new Card</a>
+        <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+      </li>
+    </ul>
+
+    <br />
+
+    <label for="email">Email</label>
+    <input name="email" id="email" type="email" />
+    <label for="password"></label>
+    <input name="password" id="password" type="password" />
+
+    <button id="login-button">Login</button>
+    <button id="get-me-button">Get me</button>
+    <div id="debug">DEBUG:</div>
+  </body>
+  <script>
+    const debug = (message) => {
+      const debug = document.getElementById('debug');
+      if (!debug) {
+        throw new Error('Failed to get Debug element');
+      }
+
+      debug.innerText += `\n${message}`;
+    };
+    const getCredentials = () => {
+      const emailElement = document.getElementById('email');
+      const passwordElement = document.getElementById('password');
+
+      if (!emailElement || !passwordElement) {
+        throw new Error('Elements are not defined');
+        return;
+      }
+
+      const email = emailElement.value;
+      const password = passwordElement.value;
+
+      if (!email || !password) {
+        throw new Error('Values are not defined');
+      }
+
+      return { email: email.trim(), password: password.trim() };
+    };
+
+    const getMe = async () => {
+      const GET_ME_URL = 'http://localhost:3000/api/auth/me';
+
+      const response = await fetch(GET_ME_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      }).then((raw) => raw.json());
+
+      console.log('Get me response: ', response);
+      const user = response.data.user;
+
+      if (user) {
+        debug(`Logged in as:`);
+        debug(`First: ${user.first}`);
+        debug(`Last: ${user.last}`);
+        debug(`Email: ${user.email}`);
+        debug(`Role: ${user.role}`);
+      } else {
+        debug('User is not signed in :(');
+      }
+
+      return user;
+    };
+
+    const signIn = async (email, password) => {
+      const SIGN_IN_URL = 'http://localhost:3000/api/auth/sign-in/email';
+
+      const body = JSON.stringify({
+        email,
+        password,
+      });
+
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      const response = await fetch(SIGN_IN_URL, {
+        method: 'POST',
+        headers,
+        body,
+        credentials: 'include',
+      }).then((raw) => raw.json());
+
+      return response;
+    };
+
+    const loginButton = document.getElementById('login-button');
+    const getMeButton = document.getElementById('get-me-button');
+    if (!loginButton || !getMeButton) {
+      throw new Error('There is no login or get-me button');
+    }
+
+    loginButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+
+      const { email, password } = getCredentials();
+
+      debug(`Email: ${email}`);
+      debug(`Password: ${password}`);
+
+      const response = await signIn(email, password);
+      console.log(response);
+    });
+
+    getMeButton.addEventListener('click', async (e) => {
+      e.preventDefault();
+
+      const user = await getMe();
+      console.log('User: ', user);
+    });
+  </script>
+</html>

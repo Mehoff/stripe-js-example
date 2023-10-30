@@ -7,6 +7,16 @@
     <title>Setup Intent</title>
   </head>
   <body>
+    <ul id="nav">
+      <li>
+        <a href="/sign-in.html">Authentication</a>
+        <a href="/pages/setup-intent.html">Save new Card</a>
+        <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+      </li>
+    </ul>
+
+    <br />
+
     <div class="main">
       <div id="checkout">
         <div id="payment-form">
@@ -23,6 +33,7 @@
               <div id="card-element" class="field"></div>
             </label>
           </fieldset>
+          <button id="setup-intent-button">Setup intent</button>
           <button id="card-button">Save card</button>
         </div>
       </div>
@@ -30,51 +41,99 @@
     <div id="debug-messages"><b>DEBUG:</b></div>
   </body>
   <script>
-    function debug(message) {
+    const SETUP_INTENT_URL =
+      'http://localhost:3000/api/payments/stripe/setup-intents';
+
+    const GET_PUBLIC_KEY_URL =
+      'http://localhost:3000/api/payments/stripe/pub-key';
+
+    let key;
+    let stripe;
+    let elements;
+    let clientSecret;
+    let cardButton;
+    let setupIntentButton;
+
+    const debug = (message) => {
       const debugMessage = document.getElementById('debug-messages');
       console.log('Debug: ', message);
       debugMessage.innerText += `\n${message}`;
-    }
+    };
 
-    // -----> PUT YOUR TEST KEY HERE <------
-    const key = 'pk_test_';
-    // -------------------------------------
-    const reqUrl = 'http://localhost:3000/api/payments/stripe/setup-intents';
-    const cardButton = document.getElementById('card-button');
-    debug('Create setup intent...');
-    let clientSecret;
+    const getPublicKey = async () => {
+      const response = await fetch(GET_PUBLIC_KEY_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      }).then((res) => res.json());
 
-    fetch(reqUrl)
-      .then((raw) => raw.json())
-      .then(async (body) => {
-        clientSecret = body.data.clientSecret;
-        debug(`Recieved clientSecret: ${clientSecret}`);
+      if (response.data.error) {
+        throw new Error('Failed to key public key');
+      }
+
+      const key = response.data.key;
+      return key;
+    };
+
+    const load = async () => {
+      key = await getPublicKey();
+      stripe = Stripe(key);
+      elements = stripe.elements();
+
+      const cardElement = elements.create('card');
+      cardElement.mount('#card-element');
+
+      cardButton = document.getElementById('card-button');
+      cardButton.disabled = true;
+
+      setupIntentButton = document.getElementById('setup-intent-button');
+
+      setupIntentButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+
+        if (cardButton && cardButton.disabled) {
+          cardButton.disabled = false;
+        }
+
+        const options = {
+          headers: {
+            'content-type': 'application/json',
+          },
+          credentials: 'include',
+        };
+
+        debug('Create setup intent...');
+        const response = await fetch(SETUP_INTENT_URL, options).then((raw) =>
+          raw.json()
+        );
+
+        clientSecret = response.data.clientSecret;
+        debug(`Recieved 'clientSecret': ${clientSecret}`);
       });
 
-    const stripe = Stripe(key);
-    const elements = stripe.elements();
+      cardButton.addEventListener('click', (e) => {
+        e.preventDefault();
 
-    const cardElement = elements.create('card');
-    cardElement.mount('#card-element');
+        stripe
+          .confirmCardSetup(clientSecret, {
+            payment_method: {
+              card: cardElement,
+            },
+          })
+          .then((result) => {
+            if (result.error) {
+              debug(result.error.message);
+            } else {
+              debug('Successfully saved card');
+              debug(`Payment method: ${result.setupIntent.payment_method}`);
+              console.log(result);
+            }
+          });
+      });
+    };
 
-    cardButton.addEventListener('click', (e) => {
-      e.preventDefault();
-
-      stripe
-        .confirmCardSetup(clientSecret, {
-          payment_method: {
-            card: cardElement,
-          },
-        })
-        .then((result) => {
-          if (result.error) {
-            debug(result.error.message);
-          } else {
-            debug('Successfully saved card');
-            debug(`Payment method: ${result.setupIntent.payment_method}`);
-            console.log(result);
-          }
-        });
-    });
+    load();
   </script>
 </html>

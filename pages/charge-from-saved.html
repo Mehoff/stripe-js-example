@@ -7,6 +7,16 @@
     <title>Setup Intent</title>
   </head>
   <body>
+    <ul id="nav">
+      <li>
+        <a href="/sign-in.html">Authentication</a>
+        <a href="/pages/setup-intent.html">Save new Card</a>
+        <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+      </li>
+    </ul>
+
+    <br />
+
     <div>
       <h2>Cards</h2>
       <ul id="cards-list"></ul>
@@ -34,60 +44,108 @@
     </div>
   </body>
   <script>
-    // -----> PUT YOUR TEST KEY HERE <------
-    const key = 'pk_test_';
-    // -------------------------------------
-    const stripe = Stripe(key);
-    const elements = stripe.elements();
+    const GET_CREDIT_CARDS_URL =
+      'http://localhost:3000/api/payments/stripe/credit-cards';
+
+    const CREATE_PAYMENT_METHOD_URL =
+      'http://localhost:3000/api/payments/stripe/payment-intents';
+
+    const GET_PUBLIC_KEY_URL =
+      'http://localhost:3000/api/payments/stripe/pub-key';
+
+    let key;
+    let stripe;
+    let elements;
+
+    const cardsList = document.getElementById('cards-list');
+    const chargeButton = document.getElementById('charge-button');
+    const amountInput = document.getElementById('amount');
+    const paymentMethodInput = document.getElementById('payment-method');
 
     const debug = (message) => {
       const debugMessage = document.getElementById('debug-messages');
       console.log('Debug: ', message);
       debugMessage.innerText += `\n${message}`;
     };
-    const loadCards = () => {
-      const GET_CREDIT_CARDS_URL =
-        'http://localhost:3000/api/payments/stripe/credit-cards';
+
+    const getPublicKey = async () => {
+      const response = await fetch(GET_PUBLIC_KEY_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      }).then((res) => res.json());
+
+      if (response.data.error) {
+        throw new Error('Failed to key public key');
+      }
+
+      const key = response.data.key;
+      return key;
+    };
+
+    const load = async () => {
+      key = await getPublicKey();
+      stripe = Stripe(key);
+      elements = stripe.elements();
+
+      loadCards();
+    };
+
+    const loadCards = async () => {
       const addCard = (card) => {
         const li = document.createElement('li');
         li.innerText = card.id;
-
         cardsList.append(li);
       };
 
-      fetch(GET_CREDIT_CARDS_URL)
-        .then((raw) => raw.json())
-        .then((body) => {
-          const cards = body.data.cards;
+      const response = await fetch(GET_CREDIT_CARDS_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      }).then((raw) => raw.json());
 
-          for (const card of cards) addCard(card);
-        });
+      if (!response || response.data.error) {
+        throw new Error(response.data.error ?? 'Failed to load credit cards');
+      }
+
+      const cards = response.data.cards;
+      for (const card of cards) addCard(card);
     };
-    const createPaymentIntent = async (payment_method, amount) => {
-      const CREATE_PAYMENT_METHOD_URL =
-        'http://localhost:3000/api/payments/stripe/payment-intents';
 
+    const createPaymentIntent = async (payment_method, amount) => {
       debug('Create payment method id...');
       debug(`Amount: ${amount}`);
       debug(`Payment Method: ${payment_method}`);
 
-      const body = await fetch(CREATE_PAYMENT_METHOD_URL, {
+      const options = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include',
         body: JSON.stringify({
           paymentMethodId: payment_method,
           amount,
         }),
-      }).then((res) => res.json());
+      };
 
-      if (body.data.error)
-        return debug(
-          `Error parsing response from backend: ${body.data.error.message}`
+      const response = await fetch(CREATE_PAYMENT_METHOD_URL, options).then(
+        (res) => res.json()
+      );
+
+      if (!response || response.data.error) {
+        console.log('Response: ', response);
+        throw new Error(
+          response.data.error ?? 'Failed to create payment intent'
         );
+      }
 
-      const paymentIntent = body.data.paymentIntent;
+      const data = response.data;
+      const paymentIntent = data.paymentIntent;
       console.log('Payment Intent: ', paymentIntent);
 
       if (
@@ -108,18 +166,15 @@
         if (confirm.error) {
           debug('Failed to confirm payment intent');
           debug(confirm.error.message);
-          return;
+          throw new Error(
+            confirm.error.message ?? 'Failed to confirm payment intent'
+          );
         }
 
         debug('Confirmed payment intent successfully');
       }
       debug('Payment was successful!');
     };
-
-    const cardsList = document.getElementById('cards-list');
-    const chargeButton = document.getElementById('charge-button');
-    const amountInput = document.getElementById('amount');
-    const paymentMethodInput = document.getElementById('payment-method');
 
     chargeButton.addEventListener('click', async (e) => {
       e.preventDefault();
@@ -134,6 +189,6 @@
       const paymentIntent = await createPaymentIntent(payment_method, amount);
     });
 
-    loadCards();
+    load();
   </script>
 </html>
