@@ -19,7 +19,7 @@
 
     <div>
       <h2>Cards</h2>
-      <ul id="cards-list"></ul>
+      <ul id="payment-methods-list"></ul>
 
       <fieldset>
         <label>
@@ -47,6 +47,9 @@
     const GET_CREDIT_CARDS_URL =
       'http://localhost:3000/api/payments/stripe/credit-cards';
 
+    const GET_PAYMENT_METHODS_URL =
+      'http://localhost:3000/api/payments/stripe/payment-methods';
+
     const CREATE_PAYMENT_METHOD_URL =
       'http://localhost:3000/api/payments/stripe/payment-intents';
 
@@ -57,7 +60,7 @@
     let stripe;
     let elements;
 
-    const cardsList = document.getElementById('cards-list');
+    const paymentMethodsList = document.getElementById('payment-methods-list');
     const chargeButton = document.getElementById('charge-button');
     const amountInput = document.getElementById('amount');
     const paymentMethodInput = document.getElementById('payment-method');
@@ -90,17 +93,29 @@
       stripe = Stripe(key);
       elements = stripe.elements();
 
-      loadCards();
+      await loadPaymentMethods();
     };
 
-    const loadCards = async () => {
-      const addCard = (card) => {
+    loadPaymentMethods = async () => {
+      const addPaymentMethod = (paymentMethod) => {
         const li = document.createElement('li');
-        li.innerText = card.id;
-        cardsList.append(li);
+        const div = document.createElement('div');
+        const id = document.createElement('h4');
+        const type = document.createElement('h3');
+
+        console.log(paymentMethod);
+
+        div.className = 'payment-method';
+        id.innerText = paymentMethod.id;
+        type.innerText = paymentMethod.type;
+
+        div.append(type);
+        div.append(id);
+        li.append(div);
+        paymentMethodsList.append(li);
       };
 
-      const response = await fetch(GET_CREDIT_CARDS_URL, {
+      const response = await fetch(GET_PAYMENT_METHODS_URL, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -109,11 +124,14 @@
       }).then((raw) => raw.json());
 
       if (!response || response.data.error) {
-        throw new Error(response.data.error ?? 'Failed to load credit cards');
+        throw new Error(
+          response.data.error ?? 'Failed to load payment methods'
+        );
       }
 
-      const cards = response.data.cards;
-      for (const card of cards) addCard(card);
+      const paymentMethods = response.data.paymentMethods;
+      for (const paymentMethod of paymentMethods)
+        addPaymentMethod(paymentMethod);
     };
 
     const createPaymentIntent = async (payment_method, amount) => {

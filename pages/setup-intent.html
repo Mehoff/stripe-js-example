@@ -19,23 +19,9 @@
 
     <div class="main">
       <div id="checkout">
-        <div id="payment-form">
-          <h2>Save card (Setup intent)</h2>
-          <fieldset>
-            <label>
-              <span>Name</span>
-              <input id="cardholder-name" class="field" value="Illia Mikhow" />
-            </label>
-          </fieldset>
-          <fieldset>
-            <label>
-              <span>Card details</span>
-              <div id="card-element" class="field"></div>
-            </label>
-          </fieldset>
-          <button id="setup-intent-button">Setup intent</button>
-          <button id="card-button">Save card</button>
-        </div>
+        <div id="payment-form"></div>
+        <button id="setup-intent-button">Setup intent</button>
+        <button id="card-button">Save card</button>
       </div>
     </div>
     <div id="debug-messages"><b>DEBUG:</b></div>
@@ -79,11 +65,6 @@
 
     const load = async () => {
       key = await getPublicKey();
-      stripe = Stripe(key);
-      elements = stripe.elements();
-
-      const cardElement = elements.create('card');
-      cardElement.mount('#card-element');
 
       cardButton = document.getElementById('card-button');
       cardButton.disabled = true;
@@ -110,27 +91,70 @@
         );
 
         clientSecret = response.data.clientSecret;
+        if (!clientSecret) {
+          debug(`'clientSecret' is undefined`);
+          throw new Error('Client secret is undefined');
+        }
+
         debug(`Recieved 'clientSecret': ${clientSecret}`);
+
+        stripe = Stripe(key);
+        elements = stripe.elements({ clientSecret });
+
+        // .create('payment', options)
+        // options can be used to change look of the element
+        const paymentElement = elements.create('payment');
+        paymentElement.mount('#payment-form');
       });
 
-      cardButton.addEventListener('click', (e) => {
+      cardButton.addEventListener('click', async (e) => {
+        debug('Save Setup Intent button...');
         e.preventDefault();
 
-        stripe
-          .confirmCardSetup(clientSecret, {
-            payment_method: {
-              card: cardElement,
-            },
-          })
-          .then((result) => {
-            if (result.error) {
-              debug(result.error.message);
-            } else {
-              debug('Successfully saved card');
-              debug(`Payment method: ${result.setupIntent.payment_method}`);
-              console.log(result);
-            }
-          });
+        debug('Elements submit...');
+
+        const submit = await elements.submit();
+
+        if (!submit || submit.error) {
+          const message = submit.error.message;
+          debug(message);
+          throw new Error(message);
+        }
+
+        debug('Confirm Setup...');
+
+        const result = await stripe.confirmSetup({
+          elements,
+          clientSecret,
+          redirect: 'if_required',
+        });
+
+        console.log('Result: ', result);
+
+        if (result.error) {
+          const message = result.error.message;
+          debug(message);
+          throw new Error(message);
+        } else {
+          const paymentMethodId = result.setupIntent.payment_method;
+          debug(`Successfully added payment method: ${paymentMethodId}`);
+        }
+
+        // stripe
+        //   .confirmCardSetup(clientSecret, {
+        //     payment_method: {
+        //       card: cardElement,
+        //     },
+        //   })
+        //   .then((result) => {
+        //     if (result.error) {
+        //       debug(result.error.message);
+        //     } else {
+        //       debug('Successfully saved card');
+        //       debug(`Payment method: ${result.setupIntent.payment_method}`);
+        //       console.log(result);
+        //     }
+        //   });
       });
     };
 

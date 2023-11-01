@@ -26,6 +26,9 @@
     <div id="debug">DEBUG:</div>
   </body>
   <script>
+    // 4000 0027 6000 3184 - Authentication every time
+    // 4242 4242 4242 4242 - No Authentication
+    // 4000 0000 0000 9995 - Fail on any action
     const debug = (message) => {
       const debug = document.getElementById('debug');
       if (!debug) {
