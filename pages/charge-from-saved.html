@@ -12,19 +12,20 @@
         <a href="/sign-in.html">Authentication</a>
         <a href="/pages/setup-intent.html">Save new Card</a>
         <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+        <a href="/pages/package-purchase.html">Buy package</a>
       </li>
     </ul>
 
     <br />
 
     <div>
-      <h2>Cards</h2>
+      <h2>Payment methods</h2>
       <ul id="payment-methods-list"></ul>
 
       <fieldset>
         <label>
           <span>Payment Method</span>
-          <input id="payment-method" value="pm_1O6vA6GTq7OAQG1vp4TqPLKN" />
+          <input id="payment-method" value="" />
         </label>
       </fieldset>
 
@@ -44,17 +45,12 @@
     </div>
   </body>
   <script>
-    const GET_CREDIT_CARDS_URL =
-      'http://localhost:3000/api/payments/stripe/credit-cards';
-
-    const GET_PAYMENT_METHODS_URL =
-      'http://localhost:3000/api/payments/stripe/payment-methods';
-
-    const CREATE_PAYMENT_METHOD_URL =
-      'http://localhost:3000/api/payments/stripe/payment-intents';
-
-    const GET_PUBLIC_KEY_URL =
-      'http://localhost:3000/api/payments/stripe/pub-key';
+    const BASE = 'http://localhost:3000/api';
+    const GET_CREDIT_CARDS_URL = `${BASE}/payments/stripe/credit-cards`;
+    const GET_PAYMENT_METHODS_URL = `${BASE}/payments/stripe/payment-methods`;
+    const CREATE_PAYMENT_INTENT_URL = `${BASE}/payments/stripe/payment-intents`;
+    const CREATE_PACKAGE_PAYMENT_INTENT_URL = `${BASE}/payments/stripe/package`;
+    const GET_PUBLIC_KEY_URL = `${BASE}/payments/stripe/pub-key`;
 
     let key;
     let stripe;
@@ -151,9 +147,69 @@
         }),
       };
 
-      const response = await fetch(CREATE_PAYMENT_METHOD_URL, options).then(
+      const response = await fetch(CREATE_PAYMENT_INTENT_URL, options).then(
         (res) => res.json()
       );
+
+      if (!response || response.data.error) {
+        console.log('Response: ', response);
+        throw new Error(
+          response.data.error ?? 'Failed to create payment intent'
+        );
+      }
+
+      const data = response.data;
+      const paymentIntent = data.paymentIntent;
+      console.log('Payment Intent: ', paymentIntent);
+
+      if (
+        ['requires_action', 'authentication_required'].includes(
+          paymentIntent.status
+        )
+      ) {
+        debug('Payment requires an action/confirmation/authentication...');
+        const confirm = await stripe.confirmCardPayment(
+          paymentIntent.client_secret,
+          {
+            payment_method: paymentIntent.payment_method,
+          }
+        );
+
+        console.log('confirm: ', confirm);
+
+        if (confirm.error) {
+          debug('Failed to confirm payment intent');
+          debug(confirm.error.message);
+          throw new Error(
+            confirm.error.message ?? 'Failed to confirm payment intent'
+          );
+        }
+
+        debug('Confirmed payment intent successfully');
+      }
+      debug('Payment was successful!');
+    };
+
+    const createPackagePaymentIntent = async (payment_method, package) => {
+      debug(`Selected package: ${package}`);
+      debug(`Payment Method: ${payment_method}`);
+
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          paymentMethodId: payment_method,
+          package,
+        }),
+      };
+
+      const response = await fetch(
+        CREATE_PACKAGE_PAYMENT_INTENT_URL,
+        options
+      ).then((res) => res.json());
 
       if (!response || response.data.error) {
         console.log('Response: ', response);

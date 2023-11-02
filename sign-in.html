@@ -11,6 +11,7 @@
         <a href="/sign-in.html">Authentication</a>
         <a href="/pages/setup-intent.html">Save new Card</a>
         <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+        <a href="/pages/package-purchase.html">Buy package</a>
       </li>
     </ul>
 
@@ -26,6 +27,7 @@
     <div id="debug">DEBUG:</div>
   </body>
   <script>
+    const GET_ME_URL = 'http://localhost:3000/api/auth/me';
     // 4000 0027 6000 3184 - Authentication every time
     // 4242 4242 4242 4242 - No Authentication
     // 4000 0000 0000 9995 - Fail on any action
@@ -57,8 +59,6 @@
     };
 
     const getMe = async () => {
-      const GET_ME_URL = 'http://localhost:3000/api/auth/me';
-
       const response = await fetch(GET_ME_URL, {
         method: 'GET',
         headers: {

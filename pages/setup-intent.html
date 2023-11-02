@@ -12,6 +12,7 @@
         <a href="/sign-in.html">Authentication</a>
         <a href="/pages/setup-intent.html">Save new Card</a>
         <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+        <a href="/pages/package-purchase.html">Buy package</a>
       </li>
     </ul>
 
@@ -101,8 +102,6 @@
         stripe = Stripe(key);
         elements = stripe.elements({ clientSecret });
 
-        // .create('payment', options)
-        // options can be used to change look of the element
         const paymentElement = elements.create('payment');
         paymentElement.mount('#payment-form');
       });
@@ -139,22 +138,6 @@
           const paymentMethodId = result.setupIntent.payment_method;
           debug(`Successfully added payment method: ${paymentMethodId}`);
         }
-
-        // stripe
-        //   .confirmCardSetup(clientSecret, {
-        //     payment_method: {
-        //       card: cardElement,
-        //     },
-        //   })
-        //   .then((result) => {
-        //     if (result.error) {
-        //       debug(result.error.message);
-        //     } else {
-        //       debug('Successfully saved card');
-        //       debug(`Payment method: ${result.setupIntent.payment_method}`);
-        //       console.log(result);
-        //     }
-        //   });
       });
     };
 

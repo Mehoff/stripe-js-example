@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://js.stripe.com/v3/"></script>
+    <title>Package purchase</title>
+  </head>
+  <body>
+    <ul id="nav">
+      <li>
+        <a href="/sign-in.html">Authentication</a>
+        <a href="/pages/setup-intent.html">Save new Card</a>
+        <a href="/pages/charge-from-saved.html">Charge from Saved Card</a>
+        <a href="/pages/package-purchase.html">Buy package</a>
+      </li>
+    </ul>
+
+    <h1>Select Agent Plan:</h1>
+    <div>
+      <h3>Current package</h3>
+      <h4 id="current-package">Loading...</h4>
+    </div>
+
+    <h2>Payment methods</h2>
+    <ul id="payment-methods-list"></ul>
+
+    <form id="agent-form">
+      <ul>
+        <li>
+          <input
+            type="radio"
+            id="agent-starter"
+            name="agent-plan"
+            value="AGENT_STARTER"
+          />
+          <label for="agent-starter">Agent Starter</label>
+        </li>
+        <li>
+          <input
+            type="radio"
+            id="agent-scale"
+            name="agent-plan"
+            value="AGENT_SCALE"
+          />
+          <label for="agent-scale">Agent Scale</label>
+        </li>
+        <li>
+          <input
+            type="radio"
+            id="agent-pro"
+            name="agent-plan"
+            value="AGENT_PRO"
+          />
+          <label for="agent-pro">Agent Pro</label>
+        </li>
+      </ul>
+    </form>
+
+    <input id="payment-method" type="text" />
+    <button id="charge-button">Charge</button>
+
+    <div id="payment-element"></div>
+    <div id="debug-messages">
+      <b>DEBUG</b>
+    </div>
+  </body>
+  <script>
+    const BASE = 'http://localhost:3000/api';
+
+    const GET_PAYMENT_METHODS_URL = `${BASE}/payments/stripe/payment-methods`;
+    const CREATE_PACKAGE_PAYMENT_INTENT_URL = `${BASE}/payments/stripe/package`;
+    const GET_PUBLIC_KEY_URL = `${BASE}/payments/stripe/pub-key`;
+    const GET_ME_URL = `${BASE}/auth/me`;
+
+    const agentForm = document.getElementById('agent-form');
+    const chargeButton = document.getElementById('charge-button');
+    const paymentMethodInput = document.getElementById('payment-method');
+    const paymentMethodsList = document.getElementById('payment-methods-list');
+
+    let selectedPackage;
+    let key;
+    let stripe;
+    let elements;
+
+    const debug = (message) => {
+      const debugMessage = document.getElementById('debug-messages');
+      console.log('Debug: ', message);
+      debugMessage.innerText += `\n${message}`;
+    };
+    const getPublicKey = async () => {
+      const response = await fetch(GET_PUBLIC_KEY_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      }).then((res) => res.json());
+
+      if (response.data.error) {
+        throw new Error('Failed to key public key');
+      }
+
+      const key = response.data.key;
+      return key;
+    };
+    const getCurrentPackage = async () => {
+      const currentPackage = document.getElementById('current-package');
+
+      const options = {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      };
+
+      const getMe = async () => {
+        const response = await fetch(GET_ME_URL, options).then((raw) =>
+          raw.json()
+        );
+        if (!response || response.error) {
+          const message = response.error ?? 'Failed to GET current user data';
+          console.error(message);
+          throw new Error(message);
+        }
+
+        const data = response.data;
+        console.log('Get me data: ', data);
+        return data.user;
+      };
+
+      const user = await getMe();
+      const companyId = user.companyMember.company.id;
+      const GET_CURRENT_PACKAGE_URL = `${BASE}/companies/${companyId}/package`;
+      console.log('URL: ', GET_CURRENT_PACKAGE_URL);
+
+      const response = await fetch(GET_CURRENT_PACKAGE_URL, options).then(
+        (raw) => raw.json()
+      );
+
+      console.log('Get current package: ', response);
+
+      if (!response || response.data.error) {
+        throw new Error(
+          response.data.error ?? 'Failed to load current package'
+        );
+      }
+
+      console.log('Get current package: ', response);
+      const package = response.data.package;
+      const packageType = package
+        ? package.type
+        : 'User does not have a package selected';
+
+      currentPackage.innerText = packageType;
+    };
+
+    const loadPaymentMethods = async () => {
+      const addPaymentMethod = (paymentMethod) => {
+        const li = document.createElement('li');
+        const div = document.createElement('div');
+        const id = document.createElement('div');
+        const type = document.createElement('div');
+
+        console.log(paymentMethod);
+
+        div.className = 'payment-method';
+        id.innerText = paymentMethod.id;
+        type.innerText = paymentMethod.type;
+
+        div.append(type);
+        div.append(id);
+        li.append(div);
+        paymentMethodsList.append(li);
+      };
+
+      const response = await fetch(GET_PAYMENT_METHODS_URL, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+      }).then((raw) => raw.json());
+
+      if (!response || response.data.error) {
+        throw new Error(
+          response.data.error ?? 'Failed to load payment methods'
+        );
+      }
+
+      const paymentMethods = response.data.paymentMethods;
+      for (const paymentMethod of paymentMethods)
+        addPaymentMethod(paymentMethod);
+    };
+    const load = async () => {
+      key = await getPublicKey();
+      stripe = Stripe(key);
+      elements = stripe.elements();
+
+      await getCurrentPackage();
+      await loadPaymentMethods();
+
+      const createPackagePaymentIntent = async (
+        packageType,
+        paymentMethodId
+      ) => {
+        debug('Create Package Payment Intent...');
+        debug(`Package type: ${packageType}`);
+        debug(`Payment method: ${paymentMethodId}`);
+
+        if (!packageType || !paymentMethodId) {
+          const message = 'Some necessary information missing';
+          debug(message);
+          throw new Error(message);
+        }
+
+        const body = JSON.stringify({
+          packageType,
+          paymentMethodId,
+        });
+
+        const options = {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body,
+        };
+
+        const response = await fetch(
+          CREATE_PACKAGE_PAYMENT_INTENT_URL,
+          options
+        ).then((res) => res.json());
+
+        if (!response || response.data.error) {
+          console.log('Response: ', response);
+          throw new Error(
+            response.data.error ?? 'Failed to create package payment intent'
+          );
+        }
+
+        const data = response.data;
+        const paymentIntent = data.paymentIntent;
+        console.log('Payment Intent: ', paymentIntent);
+
+        if (
+          ['requires_action', 'authentication_required'].includes(
+            paymentIntent.status
+          )
+        ) {
+          debug('Payment requires an action/confirmation/authentication...');
+          const confirm = await stripe.confirmCardPayment(
+            paymentIntent.client_secret,
+            {
+              payment_method: paymentIntent.payment_method,
+            }
+          );
+
+          console.log('confirm: ', confirm);
+
+          if (confirm.error) {
+            debug('Failed to confirm payment intent');
+            debug(confirm.error.message);
+            throw new Error(
+              confirm.error.message ?? 'Failed to confirm payment intent'
+            );
+          }
+
+          debug('Confirmed payment intent successfully');
+        }
+        debug('Payment (package purchase) was successful!');
+      };
+
+      chargeButton.addEventListener('click', async (e) => {
+        e.preventDefault();
+
+        const package = selectedPackage;
+        const payment_method = paymentMethodInput.value;
+
+        if (!payment_method) {
+          const message = 'Payment method is undefined';
+          debug(message);
+          throw new Error(message);
+        }
+
+        const paymentIntent = await createPackagePaymentIntent(
+          package,
+          payment_method
+        );
+
+        return paymentIntent;
+      });
+
+      agentForm.addEventListener('change', () => {
+        selectedPackage = document.querySelector(
+          'input[name="agent-plan"]:checked'
+        ).value;
+        console.log('Selected Agent Plan: ' + selectedPackage);
+      });
+    };
+
+    load();
+  </script>
+</html>
