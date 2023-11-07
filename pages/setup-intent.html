@@ -92,6 +92,7 @@
         );
 
         clientSecret = response.data.clientSecret;
+
         if (!clientSecret) {
           debug(`'clientSecret' is undefined`);
           throw new Error('Client secret is undefined');

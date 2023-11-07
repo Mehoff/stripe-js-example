@@ -168,12 +168,11 @@
         )
       ) {
         debug('Payment requires an action/confirmation/authentication...');
-        const confirm = await stripe.confirmCardPayment(
-          paymentIntent.client_secret,
-          {
-            payment_method: paymentIntent.payment_method,
-          }
-        );
+
+        const confirm = await stripe.confirmPayment({
+          clientSecret: paymentIntent.client_secret,
+          redirect: 'if_required',
+        });
 
         console.log('confirm: ', confirm);
 
@@ -228,12 +227,11 @@
         )
       ) {
         debug('Payment requires an action/confirmation/authentication...');
-        const confirm = await stripe.confirmCardPayment(
-          paymentIntent.client_secret,
-          {
-            payment_method: paymentIntent.payment_method,
-          }
-        );
+
+        const confirm = await stripe.confirmPayment({
+          clientSecret: paymentIntent.client_secret,
+          redirect: 'if_required',
+        });
 
         console.log('confirm: ', confirm);
 

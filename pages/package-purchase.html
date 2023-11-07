@@ -234,8 +234,9 @@
           options
         ).then((res) => res.json());
 
+        console.log('Create Package Payment Intent Response: ', response);
+
         if (!response || response.data.error) {
-          console.log('Response: ', response);
           throw new Error(
             response.data.error ?? 'Failed to create package payment intent'
           );
@@ -251,14 +252,13 @@
           )
         ) {
           debug('Payment requires an action/confirmation/authentication...');
-          const confirm = await stripe.confirmCardPayment(
-            paymentIntent.client_secret,
-            {
-              payment_method: paymentIntent.payment_method,
-            }
-          );
 
-          console.log('confirm: ', confirm);
+          const confirm = await stripe.confirmPayment({
+            clientSecret: paymentIntent.client_secret,
+            redirect: 'if_required',
+          });
+
+          console.log('Confirm payment response: ', confirm);
 
           if (confirm.error) {
             debug('Failed to confirm payment intent');
@@ -289,6 +289,8 @@
           package,
           payment_method
         );
+
+        console.log('Created payment intent: ', paymentIntent);
 
         return paymentIntent;
       });

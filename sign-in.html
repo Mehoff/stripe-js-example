@@ -102,6 +102,12 @@
         credentials: 'include',
       }).then((raw) => raw.json());
 
+      if (response.data.error) {
+        debug(`Failed to sign in: ${response.data.error}`);
+      } else {
+        debug(`Signed in as ${response.data.user.email}`);
+      }
+
       return response;
     };
 
